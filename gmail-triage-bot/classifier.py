@@ -1,6 +1,19 @@
+import threading
 import os
 import json
 import time
+
+_API_LOCK = threading.Lock()
+_COOLDOWN_UNTIL = 0.0
+
+def _cekej_na_limit():
+    while True:
+        with _API_LOCK:
+            cekat = _COOLDOWN_UNTIL - time.time()
+        if cekat > 0:
+            time.sleep(min(cekat, 2.0))
+        else:
+            break
 from enum import Enum
 from dotenv import load_dotenv
 from google import genai
@@ -70,37 +83,42 @@ def analyzuj_email(odesilatel: str, predmet: str, obsah: str, ma_prilohu: bool =
 
     posledni_chyba = None
     for model_name in MODELY_FALLBACK:
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=EmailAnalyza,
-                    temperature=0.1,
-                ),
-            )
-            vysledek = EmailAnalyza.model_validate_json(response.text)
+        for _pokus in range(4):
+            try:
+                _cekej_na_limit()
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=EmailAnalyza,
+                        temperature=0.1,
+                    ),
+                )
+                vysledek = EmailAnalyza.model_validate_json(response.text)
             
-            if vysledek.kategorie not in povolene_nazvy:
-                vysledek.kategorie = povolene_nazvy[0]
+                if vysledek.kategorie not in povolene_nazvy:
+                    vysledek.kategorie = povolene_nazvy[0]
                 
-            if any(vip.lower() in odesilatel.lower() for vip in konfig.get("vip_odesilatele", []) if vip.strip()):
-                vysledek.priorita = Priorita.URGENT
-                vysledek.archivovat_z_inboxu = False
+                if any(vip.lower() in odesilatel.lower() for vip in konfig.get("vip_odesilatele", []) if vip.strip()):
+                    vysledek.priorita = Priorita.URGENT
+                    vysledek.archivovat_z_inboxu = False
 
-            return vysledek
-        except Exception as e:
-            err_str = str(e)
-            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                posledni_chyba = e
-                if "limit: 0" not in err_str and "PerDay" not in err_str:
-                    time.sleep(12)
-                continue
-            if "503" in err_str or "UNAVAILABLE" in err_str:
-                posledni_chyba = e
-                time.sleep(2)
-                continue
-            raise e
+                return vysledek
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    posledni_chyba = e
+                    if "limit: 0" not in err_str and "PerDay" not in err_str:
+                with _API_LOCK:
+                    _COOLDOWN_UNTIL = max(_COOLDOWN_UNTIL, time.time() + 45.0)
+                if _pokus < 3:
+                    continue
+            break
+                if "503" in err_str or "UNAVAILABLE" in err_str:
+                    posledni_chyba = e
+                    time.sleep(2)
+                    continue
+                raise e
 
     raise RuntimeError(f"Všechny modely jsou momentálně přetížené: {posledni_chyba}")
