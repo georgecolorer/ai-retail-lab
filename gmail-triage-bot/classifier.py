@@ -7,9 +7,6 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
-load_dotenv("../.env", override=True)
-client = genai.Client()
-
 MODELY_FALLBACK = [
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
@@ -17,6 +14,10 @@ MODELY_FALLBACK = [
     "gemini-3.6-flash",
     "gemini-4-argon",
 ]
+
+def get_genai_client() -> genai.Client:
+    load_dotenv("../.env", override=True)
+    return genai.Client()
 
 def nacti_konfiguraci() -> dict:
     with open("config.json", "r", encoding="utf-8-sig") as f:
@@ -34,6 +35,7 @@ class EmailAnalyza(BaseModel):
     archivovat_z_inboxu: bool = Field(description="True pouze pokud jde o kategorii nastavenou k archivaci nebo čistě informační mail bez nutnosti akce")
 
 def analyzuj_email(odesilatel: str, predmet: str, obsah: str, ma_prilohu: bool = False) -> EmailAnalyza:
+    client = get_genai_client()
     konfig = nacti_konfiguraci()
     kategorie_dict = konfig["kategorie"]
     povolene_nazvy = list(kategorie_dict.keys())

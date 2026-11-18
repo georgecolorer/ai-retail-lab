@@ -1,14 +1,17 @@
 import os
 import json
+import base64
 import truststore
 truststore.inject_into_ssl()
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 import streamlit as st
-from triage_bot import spust_trideni, synchronizuj_barvy_stitku, GMAIL_BARVY, HISTORY_FILE
 
 CONFIG_FILE = "config.json"
+ENV_FILE = "../.env"
+CREDENTIALS_FILE = "credentials.json"
+TOKEN_FILE = "token.json"
 
 COLOR_SLUGS = {
     "Šedá": "seda",
@@ -32,7 +35,57 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Vygenerování CSS stylů pro barevná kolečka s písmenem "a" (jako v Gmailu)
+# ---------------------------------------------------------
+# KONTROLA PRVNÍHO SPUŠTĚNÍ (ONBOARDING)
+# ---------------------------------------------------------
+def zkontroluj_instalaci():
+    chybi_env = not os.path.exists(ENV_FILE)
+    chybi_cred = not os.path.exists(CREDENTIALS_FILE)
+    return chybi_env or chybi_cred
+
+if zkontroluj_instalaci():
+    st.markdown("""
+    <div style='text-align: center; padding: 2rem 0; margin-bottom: 2rem;'>
+        <h1 style='font-size: 2.5rem; color: #0F172A; margin-bottom: 0.5rem;'>Vítejte v InboxAI 👋</h1>
+        <p style='color: #64748B; font-size: 1.1rem;'>Pro první spuštění potřebujeme propojit aplikaci s vaším Google účtem.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        with st.container(border=True):
+            st.subheader("1. Vložte Gemini API klíč")
+            st.caption("Slouží pro přístup k umělé inteligenci (získáte v Google AI Studio).")
+            gemini_key = st.text_input("Gemini API Key:", type="password", placeholder="AIzaSy...")
+            
+            st.divider()
+            
+            st.subheader("2. Přístup k firemní poště")
+            st.caption("Nahrajte soubor `credentials.json` (získáte v Google Cloud Console).")
+            uploaded_cred = st.file_uploader("Nahrát credentials.json", type=["json"])
+            
+            st.write("")
+            if st.button("Dokončit instalaci a spustit aplikaci", type="primary", use_container_width=True):
+                if not gemini_key:
+                    st.error("Chybí Gemini API klíč.")
+                elif not uploaded_cred:
+                    st.error("Chybí soubor credentials.json.")
+                else:
+                    # Uložení .env
+                    with open(ENV_FILE, "w", encoding="utf-8") as f:
+                        f.write(f"GEMINI_API_KEY={gemini_key.strip()}\n")
+                    
+                    # Uložení credentials.json
+                    with open(CREDENTIALS_FILE, "wb") as f:
+                        f.write(uploaded_cred.getvalue())
+                        
+                    st.success("Úspěšně nastaveno! Aplikace se nyní restartuje...")
+                    st.rerun()
+    st.stop()
+
+from triage_bot import spust_trideni, synchronizuj_barvy_stitku, GMAIL_BARVY, HISTORY_FILE
+
+# Zbytek aplikace (CSS styly atd.) se načte až po úspěšném onboardingu
 circle_css_rules = []
 for c_name, c_hex in GMAIL_BARVY.items():
     slug = COLOR_SLUGS[c_name]
@@ -73,7 +126,6 @@ st.markdown(f"""
         max-width: 1280px;
     }}
 
-    /* Horní hlavička */
     .header-card {{
         background-color: #FFFFFF;
         border: 1px solid #E2E8F0;
@@ -108,7 +160,6 @@ st.markdown(f"""
         white-space: nowrap;
     }}
 
-    /* Sjednocené KPI karty se stejnou výškou */
     .metric-box {{
         background-color: #FFFFFF;
         border: 1px solid #E2E8F0;
@@ -139,7 +190,6 @@ st.markdown(f"""
     .num-red {{ color: #DC2626; }}
     .num-blue {{ color: #2563EB; }}
 
-    /* Zarovnání řádků v nastavení */
     .label-preview {{
         display: inline-flex;
         align-items: center;
@@ -159,7 +209,6 @@ st.markdown(f"""
         padding: 0 0.5rem 0.35rem 0.5rem;
     }}
 
-    /* Kompaktní popover pro výběr barev */
     [data-testid="stPopoverBody"] {{
         min-width: 245px !important;
         padding: 0.75rem !important;
@@ -191,7 +240,6 @@ def nacti_historii() -> list:
     return []
 
 def vykresli_vyber_barvy(klic_id: str, vychozi_barva: str) -> str:
-    """Vykreslí Gmail paletu barevných koleček s písmenem 'a' uvnitř popover menu."""
     state_key = f"sel_color_{klic_id}"
     if state_key not in st.session_state:
         st.session_state[state_key] = vychozi_barva if vychozi_barva in GMAIL_BARVY else "Šedá"
@@ -201,7 +249,6 @@ def vykresli_vyber_barvy(klic_id: str, vychozi_barva: str) -> str:
 
     with st.popover("Barva", use_container_width=True):
         st.caption(f"Vybráno: **{aktualni}**")
-        # 2 řady po 6 kolečkách (stejně jako v Gmailu)
         for radek_idx in range(2):
             cols = st.columns(6, gap="small")
             for col_idx in range(6):
@@ -214,7 +261,6 @@ def vykresli_vyber_barvy(klic_id: str, vychozi_barva: str) -> str:
 
     return st.session_state[state_key]
 
-# Hlavička
 st.markdown("""
 <div class="header-card">
     <div>
@@ -225,7 +271,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Postranní panel
 with st.sidebar:
     st.markdown("### Rychlé třídění")
     pocet_mailu = st.slider("Počet zpráv ke zpracování", min_value=5, max_value=50, value=25)
@@ -239,6 +284,7 @@ with st.sidebar:
             progress_bar.progress(hotovo / celkem)
             status_text.caption(f"Zpracováno {hotovo}/{celkem}: {predmet[:32]}...")
 
+        # Pokud chybí token, aplikace si ho při prvním spuštění vyžádá sama
         pocet = spust_trideni(
             pocet_zprav=pocet_mailu,
             jen_neprectene=jen_neprectene,
@@ -268,7 +314,6 @@ with st.sidebar:
         st.toast(f"Úklid dokončen ({pocet} zpráv).", icon="✅")
         st.rerun()
 
-# KPI Karty (sjednocená výška i jednořádkové popisky)
 historie = nacti_historii()
 urgentni_zaznamy = [z for z in historie if z["priorita"] == "P1_URGENT"]
 s_prilohou = [z for z in historie if z.get("prilohy")]
@@ -302,7 +347,6 @@ with c4:
 
 st.write("")
 
-# Záložky
 tab_prehled, tab_nastaveni, tab_log = st.tabs([
     "Přehled roztříděné pošty",
     "Nastavení kategorií a barev",
@@ -382,7 +426,6 @@ with tab_nastaveni:
     st.write("")
     st.markdown("#### Nastavení štítků a jejich barev")
     
-    # Záhlaví sloupců pro dokonalé zarovnání
     h1, h2, h3, h4 = st.columns([1.8, 3.2, 0.9, 1.0])
     h1.markdown('<div class="table-header">Štítek v Gmailu</div>', unsafe_allow_html=True)
     h2.markdown('<div class="table-header">Pravidlo pro AI zařazení</div>', unsafe_allow_html=True)
