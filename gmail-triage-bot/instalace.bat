@@ -39,17 +39,20 @@ for /d %%D in ("C:\Program Files\Python3*" "C:\Python3*") do (
 )
 if not "%PY_EXE%"=="" goto :PYTHON_OK
 
-echo [!] V pocitaci chybi Python 3. Instaluji Python 3.12 - vyckejte 1 az 2 minuty...
-winget install -e --id Python.Python.3.12 --scope user --force --accept-package-agreements --accept-source-agreements
-for /d %%D in ("%LocalAppData%\Programs\Python\Python3*") do (
-    "%%D\python.exe" -c "import encodings, venv" >nul 2>&1
-    if not errorlevel 1 set "PY_EXE=%%D\python.exe"
+if exist "python-installer.exe" (
+    echo [!] Instaluji Python 3.12 - vyckejte 1 az 2 minuty...
+    start /wait "" "python-installer.exe" /passive InstallAllUsers=0 PrependPath=1 Include_test=0
+    for /d %%D in ("%LocalAppData%\Programs\Python\Python3*") do (
+        "%%D\python.exe" -c "import encodings, venv" >nul 2>&1
+        if not errorlevel 1 set "PY_EXE=%%D\python.exe"
+    )
+    if not "%PY_EXE%"=="" goto :PYTHON_OK
 )
-if not "%PY_EXE%"=="" goto :PYTHON_OK
 
 echo.
-echo [CHYBA] Nepodarilo se najit ani nainstalovat Python 3.
-echo Nainstalujte Python rucne z https://www.python.org/downloads/ a spuste instalace.bat znovu.
+echo [CHYBA] V pocitaci neni nainstalovany Python 3.
+echo Oteviram stranku pro stazeni Pythonu - nainstalujte jej a spuste instalace.bat znovu.
+start https://www.python.org/downloads/
 pause
 exit /b 1
 
@@ -80,5 +83,5 @@ if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
     echo email = "">> "%USERPROFILE%\.streamlit\credentials.toml"
 )
 
-start "" "..\.venv\Scripts\pythonw.exe" launcher.py
+"..\.venv\Scripts\python.exe" launcher.py
 exit /b 0
