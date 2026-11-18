@@ -82,13 +82,13 @@ def synchronizuj_barvy_stitku():
     odpoved_stitky = service.users().labels().list(userId="me").execute()
     existujici_stitky = {s["name"]: s["id"] for s in odpoved_stitky.get("labels", [])}
 
-    id_urgent = ziskej_nebo_vytvor_stitek(service, "AI/P1-URGENT", existujici_stitky, "Červená")
+    id_urgent = ziskej_nebo_vytvor_stitek(service, "URGENTNÍ", existujici_stitky, "Červená")
     service.users().labels().patch(
         userId="me", id=id_urgent, body={"color": GMAIL_BARVY["Červená"]}
     ).execute()
 
     for nazev, info in konfig.get("kategorie", {}).items():
-        plny_nazev = f"AI/{nazev}"
+        plny_nazev = f"{nazev}"
         barva_nazev = info.get("barva", "Šedá")
         barva_obj = GMAIL_BARVY.get(barva_nazev, GMAIL_BARVY["Šedá"])
 
@@ -143,9 +143,9 @@ def spust_trideni(pocet_zprav: int = 15, jen_neprectene: bool = False, progress_
         odpoved_stitky = service.users().labels().list(userId="me").execute()
         existujici_stitky = {s["name"]: s["id"] for s in odpoved_stitky.get("labels", [])}
 
-        id_zpracovano = ziskej_nebo_vytvor_stitek(service, "AI/Zpracovano", existujici_stitky, "Šedá")
+        id_zpracovano = ziskej_nebo_vytvor_stitek(service, "AI", existujici_stitky, "Šedá")
 
-        dotaz = "in:inbox -label:AI/Zpracovano"
+        dotaz = 'in:inbox -label:"AI"'
         if jen_neprectene:
             dotaz += " is:unread"
 
@@ -172,7 +172,7 @@ def spust_trideni(pocet_zprav: int = 15, jen_neprectene: bool = False, progress_
             for future in as_completed(budouci_vysledky):
                 msg_id, odesilatel, predmet, prilohy, analyza = future.result()
 
-                nazev_kategorie = f"AI/{analyza.kategorie}"
+                nazev_kategorie = f"{analyza.kategorie}"
                 barva_kategorie = konfig.get("kategorie", {}).get(analyza.kategorie, {}).get("barva", "Šedá")
                 id_kategorie = ziskej_nebo_vytvor_stitek(service, nazev_kategorie, existujici_stitky, barva_kategorie)
 
@@ -180,7 +180,7 @@ def spust_trideni(pocet_zprav: int = 15, jen_neprectene: bool = False, progress_
                 odebrat_stitky = []
 
                 if analyza.priorita.value == "P1_URGENT":
-                    id_urgent = ziskej_nebo_vytvor_stitek(service, "AI/P1-URGENT", existujici_stitky, "Červená")
+                    id_urgent = ziskej_nebo_vytvor_stitek(service, "URGENTNÍ", existujici_stitky, "Červená")
                     pridat_stitky.append(id_urgent)
 
                 if analyza.archivovat_z_inboxu:

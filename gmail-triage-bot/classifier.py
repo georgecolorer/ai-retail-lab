@@ -37,16 +37,21 @@ class EmailAnalyza(BaseModel):
 def analyzuj_email(odesilatel: str, predmet: str, obsah: str, ma_prilohu: bool = False) -> EmailAnalyza:
     client = get_genai_client()
     konfig = nacti_konfiguraci()
-    kategorie_dict = konfig["kategorie"]
+    kategorie_dict = konfig.get("kategorie", {})
     povolene_nazvy = list(kategorie_dict.keys())
     
-    popis_kategorii = "\n".join(
-        [f"- {nazev} (archivovat: {info.get('archivovat', False)}): {info['popis']}" for nazev, info in kategorie_dict.items()]
-    )
+    if not povolene_nazvy:
+        povolene_nazvy = ["Ostatni"]
+        popis_kategorii = "- Ostatni (archivovat: False): Veškerá příchozí pošta"
+    else:
+        popis_kategorii = "\n".join(
+            [f"- {nazev} (archivovat: {info.get('archivovat', False)}): {info['popis']}" for nazev, info in kategorie_dict.items()]
+        )
+        
     vip_seznam = ", ".join(konfig.get("vip_odesilatele", []))
 
     prompt = f"""
-    Jsi AI asistent pro organizaci pošty ve firmě: {konfig.get('firma_popis', 'Firma')}.
+    Jsi AI asistent pro organizaci pošty ve firmě: {konfig.get('firma_popis') or 'Obchodní firma'}.
     Roztřiď příchozí e-mail podle těchto firemních pravidel.
 
     POVOLENÉ KATEGORIE (musíš vybrat PŘESNĚ jeden z těchto názvů):
@@ -86,9 +91,15 @@ def analyzuj_email(odesilatel: str, predmet: str, obsah: str, ma_prilohu: bool =
 
             return vysledek
         except Exception as e:
-            if "503" in str(e) or "UNAVAILABLE" in str(e) or "429" in str(e):
+            err_str = str(e)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
                 posledni_chyba = e
-                time.sleep(1.5)
+                if "limit: 0" not in err_str and "PerDay" not in err_str:
+                    time.sleep(12)
+                continue
+            if "503" in err_str or "UNAVAILABLE" in err_str:
+                posledni_chyba = e
+                time.sleep(2)
                 continue
             raise e
 

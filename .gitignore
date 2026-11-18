@@ -11,3 +11,6 @@ history.json
 *zaloha*
 
 __pycache__/
+
+*.pyc
+bot.log

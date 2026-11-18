@@ -1,0 +1,38 @@
+{
+    "firma_popis":  "Vývojář B2B AI aplikací a firemních automatizací. Řeším technickou podporu (troubleshooting) nasazených nástrojů u klientů, správu Google Cloud a API služeb, GitHub repozitáře a nové obchodní poptávky.",
+    "vip_odesilatele":  [
+                            "jbarvir17@gmail.com"
+                        ],
+    "kategorie":  {
+                      "Podpora a bugy":  {
+                                             "popis":  "Hlášení chyb, nefunkční aplikace, žádosti o pomoc s nastavením a troubleshooting od klientů.",
+                                             "archivovat":  false,
+                                             "barva":  "Červená"
+                                         },
+                      "Klienti a poptávky":  {
+                                                 "popis":  "Komunikace se zákazníky, nové poptávky po vývoji aplikací, cenové nabídky a domlouvání schůzek.",
+                                                 "archivovat":  false,
+                                                 "barva":  "Zelená"
+                                             },
+                      "API a Cloud":  {
+                                          "popis":  "Technická upozornění z Google Cloud, GitHubu, API limity, kvóty, výpadky služeb a vývojářská hlášení.",
+                                          "archivovat":  false,
+                                          "barva":  "Oranžová"
+                                      },
+                      "Faktury a Platby":  {
+                                               "popis":  "Faktury, daňové doklady, účtenky za cloudové služby, předplatné, domény a platební potvrzení.",
+                                               "archivovat":  false,
+                                               "barva":  "Modrá"
+                                           },
+                      "Overeni a 2FA":  {
+                                            "popis":  "Jednorázové ověřovací kódy, potvrzení přihlášení k účtům, změny hesel a registrace do nástrojů.",
+                                            "archivovat":  true,
+                                            "barva":  "Tyrkysová"
+                                        },
+                      "Newslettery a Info":  {
+                                                 "popis":  "Marketingové nabídky, produktové novinky ze světa AI, promo akce a hromadná sdělení bez nutnosti akce.",
+                                                 "archivovat":  true,
+                                                 "barva":  "Šedá"
+                                             }
+                  }
+}
