@@ -18,12 +18,12 @@ py_exe = os.path.abspath(os.path.join(base_dir, "..", ".venv", "Scripts", "pytho
 dash = os.path.join(base_dir, "dashboard.py")
 
 if os.path.exists(py_exe) and os.path.exists(dash):
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
     subprocess.Popen(
         [py_exe, "-m", "streamlit", "run", dash, "--server.port", "8501", "--server.headless", "false"],
         cwd=base_dir,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         close_fds=True,
-        creationflags=flags,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
     )

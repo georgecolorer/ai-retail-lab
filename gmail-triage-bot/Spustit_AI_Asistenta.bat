@@ -1,9 +1,9 @@
 @echo off
 cd /d "%~dp0"
-if not exist "..\.venv\Scripts\python.exe" (
-    echo Aplikace jeste neni nainstalovana. Spustte nejprve instalace.bat.
+if not exist "..\.venv\Scripts\pythonw.exe" (
+    echo Aplikace jeste neni nainstalovana. Spustte nejprve 2_Instalace_InboxAI.bat.
     pause
     exit /b 1
 )
-"..\.venv\Scripts\python.exe" launcher.py
-exit /b 0
+start "" "..\.venv\Scripts\pythonw.exe" launcher.py
+exit
