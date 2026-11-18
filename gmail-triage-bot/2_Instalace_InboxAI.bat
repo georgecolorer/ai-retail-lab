@@ -75,5 +75,5 @@ if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
     echo email = "">> "%USERPROFILE%\.streamlit\credentials.toml"
 )
 
-"..\.venv\Scripts\python.exe" launcher.py
-exit /b 0
+start "" "..\.venv\Scripts\pythonw.exe" launcher.py
+exit
