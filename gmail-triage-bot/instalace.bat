@@ -3,7 +3,7 @@ chcp 65001 >nul
 cd /d "%~dp0"
 set "PYTHONHOME="
 set "PYTHONPATH="
-title InboxAI - Instalace a spusteni
+title InboxAI - Instalace
 
 echo ===================================================
 echo   InboxAI - Priprava prostredi
@@ -66,14 +66,19 @@ if not exist "..\.venv\Scripts\python.exe" (
 
 echo [2/2] Instaluji potrebne knihovny - muze trvat 1 az 2 minuty...
 "..\.venv\Scripts\python.exe" -m pip install -r requirements.txt
-if not exist "..\.venv\Scripts\streamlit.exe" (
+"..\.venv\Scripts\python.exe" -c "import streamlit" >nul 2>&1
+if errorlevel 1 (
     echo.
     echo [CHYBA] Instalace knihoven selhala. Zkontrolujte pripojeni k internetu.
     pause
     exit /b 1
 )
 
-echo.
-echo Hotovo! Spoustim aplikaci v prohlizeci...
-"..\.venv\Scripts\streamlit.exe" run dashboard.py
-if errorlevel 1 pause
+if not exist "%USERPROFILE%\.streamlit" mkdir "%USERPROFILE%\.streamlit" >nul 2>&1
+if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
+    echo [general]> "%USERPROFILE%\.streamlit\credentials.toml"
+    echo email = "">> "%USERPROFILE%\.streamlit\credentials.toml"
+)
+
+start "" "..\.venv\Scripts\pythonw.exe" launcher.py
+exit /b 0
