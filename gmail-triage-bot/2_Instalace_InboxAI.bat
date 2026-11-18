@@ -3,14 +3,13 @@ chcp 65001 >nul
 cd /d "%~dp0"
 set "PYTHONHOME="
 set "PYTHONPATH="
-title InboxAI - Instalace
+title InboxAI - Instalace prostredi
 
 echo ===================================================
 echo   InboxAI - Priprava prostredi
 echo ===================================================
 echo.
 
-:NAJIT_PYTHON
 set "PY_EXE="
 set "PY_ARGS="
 
@@ -39,20 +38,13 @@ for /d %%D in ("C:\Program Files\Python3*" "C:\Python3*") do (
 )
 if not "%PY_EXE%"=="" goto :PYTHON_OK
 
-if exist "python-installer.exe" (
-    echo [!] Instaluji Python 3.12 - vyckejte 1 az 2 minuty...
-    start /wait "" "python-installer.exe" /passive InstallAllUsers=0 PrependPath=1 Include_test=0
-    for /d %%D in ("%LocalAppData%\Programs\Python\Python3*") do (
-        "%%D\python.exe" -c "import encodings, venv" >nul 2>&1
-        if not errorlevel 1 set "PY_EXE=%%D\python.exe"
-    )
-    if not "%PY_EXE%"=="" goto :PYTHON_OK
-)
-
+echo [!] V pocitaci jeste neni nainstalovany Python 3.
 echo.
-echo [CHYBA] V pocitaci neni nainstalovany Python 3.
-echo Oteviram stranku pro stazeni Pythonu - nainstalujte jej a spuste instalace.bat znovu.
-start https://www.python.org/downloads/
+echo Postup:
+echo  1. Spustte nejprve soubor "1_Instalace_Python.exe" v teto slozce.
+echo  2. V okne instalatoru kliknete na "Install Now" a pockejte na dokonceni.
+echo  3. Pote spustte tento soubor znovu.
+echo.
 pause
 exit /b 1
 
