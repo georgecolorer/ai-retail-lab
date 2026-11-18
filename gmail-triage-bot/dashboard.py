@@ -1,106 +1,456 @@
-﻿import os
+import os
+import json
 import truststore
 truststore.inject_into_ssl()
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 import streamlit as st
-from gmail_connect import pripoj_gmail
-from triage_bot import spust_trideni
+from triage_bot import spust_trideni, synchronizuj_barvy_stitku, GMAIL_BARVY, HISTORY_FILE
 
-st.set_page_config(page_title="Gmail AI Triage Dashboard", page_icon="📬", layout="wide")
+CONFIG_FILE = "config.json"
 
-st.title("📬 Gmail AI Triage – Manažerský přehled")
-st.markdown("Automatické paralelní třídění a prioritizace příchozí pošty pomocí **Google Gemini AI**.")
+COLOR_SLUGS = {
+    "Šedá": "seda",
+    "Světle modrá": "svetle_modra",
+    "Tyrkysová": "tyrkysova",
+    "Fialová": "fialova",
+    "Růžová": "ruzova",
+    "Červená": "cervena",
+    "Tmavě šedá": "tmave_seda",
+    "Modrá": "modra",
+    "Petrolejová": "petrolejova",
+    "Oranžová": "oranzova",
+    "Žlutá": "zluta",
+    "Zelená": "zelena",
+}
 
-with st.sidebar:
-    st.header("⚡ Běžný provoz")
-    pocet_mailu = st.slider("Počet nových e-mailů", min_value=5, max_value=30, value=15)
-    jen_neprectene = st.checkbox("Třídit pouze nepřečtené zprávy", value=False)
+st.set_page_config(
+    page_title="InboxAI | Firemní správa pošty",
+    page_icon="📥",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Vygenerování CSS stylů pro barevná kolečka s písmenem "a" (jako v Gmailu)
+circle_css_rules = []
+for c_name, c_hex in GMAIL_BARVY.items():
+    slug = COLOR_SLUGS[c_name]
+    circle_css_rules.append(f"""
+    div[class*="st-key-cpick_"][class*="_{slug}"] button {{
+        background-color: {c_hex["backgroundColor"]} !important;
+        color: {c_hex["textColor"]} !important;
+        border-radius: 50% !important;
+        width: 28px !important;
+        height: 28px !important;
+        min-height: 28px !important;
+        max-width: 28px !important;
+        padding: 0 !important;
+        margin: 2px auto !important;
+        border: 1px solid rgba(0, 0, 0, 0.12) !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        line-height: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: transform 0.12s ease, box-shadow 0.12s ease !important;
+    }}
+    div[class*="st-key-cpick_"][class*="_{slug}"] button:hover {{
+        transform: scale(1.15) !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
+    }}
+    """)
+
+st.markdown(f"""
+<style>
+    #MainMenu {{visibility: hidden;}}
+    footer {{visibility: hidden;}}
     
-    if st.button("🚀 Spustit třídění Inboxu", type="primary", use_container_width=True):
+    .block-container {{
+        padding-top: 1.75rem;
+        padding-bottom: 2.5rem;
+        max-width: 1280px;
+    }}
+
+    /* Horní hlavička */
+    .header-card {{
+        background-color: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 1.35rem 1.85rem;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }}
+    .header-title {{
+        font-size: 1.55rem;
+        font-weight: 700;
+        color: #0F172A;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }}
+    .header-sub {{
+        color: #475569;
+        font-size: 0.92rem;
+        margin-top: 0.2rem;
+    }}
+    .status-pill {{
+        background-color: #ECFDF5;
+        color: #059669;
+        border: 1px solid #A7F3D0;
+        padding: 0.35rem 0.85rem;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }}
+
+    /* Sjednocené KPI karty se stejnou výškou */
+    .metric-box {{
+        background-color: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 10px;
+        padding: 1.1rem 1.35rem;
+        height: 102px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    }}
+    .metric-title {{
+        color: #64748B;
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }}
+    .metric-num {{
+        font-size: 1.85rem;
+        font-weight: 700;
+        color: #0F172A;
+        line-height: 1.1;
+    }}
+    .num-red {{ color: #DC2626; }}
+    .num-blue {{ color: #2563EB; }}
+
+    /* Zarovnání řádků v nastavení */
+    .label-preview {{
+        display: inline-flex;
+        align-items: center;
+        padding: 0.32rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.84rem;
+        font-weight: 600;
+        line-height: 1.2;
+        white-space: nowrap;
+    }}
+    .table-header {{
+        color: #64748B;
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 0 0.5rem 0.35rem 0.5rem;
+    }}
+
+    /* Kompaktní popover pro výběr barev */
+    [data-testid="stPopoverBody"] {{
+        min-width: 245px !important;
+        padding: 0.75rem !important;
+    }}
+
+    [data-testid="stSidebar"] {{
+        border-right: 1px solid #E2E8F0;
+    }}
+
+    {"".join(circle_css_rules)}
+</style>
+""", unsafe_allow_html=True)
+
+def nacti_config() -> dict:
+    with open(CONFIG_FILE, "r", encoding="utf-8-sig") as f:
+        return json.load(f)
+
+def uloz_config(data: dict):
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def nacti_historii() -> list:
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8-sig") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def vykresli_vyber_barvy(klic_id: str, vychozi_barva: str) -> str:
+    """Vykreslí Gmail paletu barevných koleček s písmenem 'a' uvnitř popover menu."""
+    state_key = f"sel_color_{klic_id}"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = vychozi_barva if vychozi_barva in GMAIL_BARVY else "Šedá"
+
+    aktualni = st.session_state[state_key]
+    barvy_seznam = list(GMAIL_BARVY.keys())
+
+    with st.popover("Barva", use_container_width=True):
+        st.caption(f"Vybráno: **{aktualni}**")
+        # 2 řady po 6 kolečkách (stejně jako v Gmailu)
+        for radek_idx in range(2):
+            cols = st.columns(6, gap="small")
+            for col_idx in range(6):
+                b_nazev = barvy_seznam[radek_idx * 6 + col_idx]
+                slug = COLOR_SLUGS[b_nazev]
+                with cols[col_idx]:
+                    if st.button("a", key=f"cpick_{klic_id}_{slug}", help=b_nazev):
+                        st.session_state[state_key] = b_nazev
+                        st.rerun()
+
+    return st.session_state[state_key]
+
+# Hlavička
+st.markdown("""
+<div class="header-card">
+    <div>
+        <div class="header-title">InboxAI — Správa a prioritizace pošty</div>
+        <div class="header-sub">Automatické třídění agendy, detekce příloh a barevná organizace štítků v Gmailu</div>
+    </div>
+    <div class="status-pill">● Aktivní (Gemini Flash)</div>
+</div>
+""", unsafe_allow_html=True)
+
+# Postranní panel
+with st.sidebar:
+    st.markdown("### Rychlé třídění")
+    pocet_mailu = st.slider("Počet zpráv ke zpracování", min_value=5, max_value=50, value=25)
+    jen_neprectene = st.checkbox("Pouze nepřečtené e-maily", value=False)
+    
+    if st.button("Spustit třídění Inboxu", type="primary", use_container_width=True):
         progress_bar = st.progress(0)
         status_text = st.empty()
 
         def aktualizuj_stav(hotovo, celkem, predmet):
             progress_bar.progress(hotovo / celkem)
-            status_text.caption(f"Zpracováno {hotovo}/{celkem}: {predmet[:35]}...")
+            status_text.caption(f"Zpracováno {hotovo}/{celkem}: {predmet[:32]}...")
 
         pocet = spust_trideni(
             pocet_zprav=pocet_mailu,
             jen_neprectene=jen_neprectene,
             progress_callback=aktualizuj_stav
         )
-        st.cache_data.clear()
-        st.success(f"Hotovo! Zpracováno {pocet} e-mailů.")
+        st.toast(f"Hotovo! Zpracováno {pocet} e-mailů.", icon="✅")
         st.rerun()
 
     st.divider()
-    st.header("🧹 Počáteční úklid (Nový účet)")
-    st.caption("Hromadné roztřídění starší pošty při prvním nasazení.")
-    pocet_uklid = st.selectbox("Velikost dávky pro úklid", options=[50, 100, 200], index=0)
+    st.markdown("### Počáteční úklid schránky")
+    st.caption("Hromadné protřídění starší pošty při prvním nasazení na účet.")
+    pocet_uklid = st.selectbox("Velikost dávky", options=[50, 100, 200, 300, 400, 500], index=0)
     
-    if st.button("🧹 Spustit hromadný úklid", use_container_width=True):
+    if st.button("Spustit hromadný úklid", use_container_width=True):
         progress_bar = st.progress(0)
         status_text = st.empty()
 
         def aktualizuj_uklid(hotovo, celkem, predmet):
             progress_bar.progress(hotovo / celkem)
-            status_text.caption(f"Úklid {hotovo}/{celkem}: {predmet[:35]}...")
+            status_text.caption(f"Úklid {hotovo}/{celkem}: {predmet[:32]}...")
 
         pocet = spust_trideni(
             pocet_zprav=pocet_uklid,
             jen_neprectene=False,
             progress_callback=aktualizuj_uklid
         )
-        st.cache_data.clear()
-        st.success(f"Úklid dokončen! Roztříděno {pocet} starších zpráv.")
+        st.toast(f"Úklid dokončen ({pocet} zpráv).", icon="✅")
         st.rerun()
 
-@st.cache_data(ttl=30)
-def nacti_statistiky_gmailu():
-    service = pripoj_gmail()
-    odpoved_stitky = service.users().labels().list(userId="me").execute()
-    ai_stitky = [s for s in odpoved_stitky.get("labels", []) if s["name"].startswith("AI/") and s["name"] != "AI/Zpracovano"]
-    
-    statistiky = {}
-    for stitek in ai_stitky:
-        detail = service.users().labels().get(userId="me", id=stitek["id"]).execute()
-        cisty_nazev = stitek["name"].replace("AI/", "")
-        statistiky[cisty_nazev] = detail.get("messagesTotal", 0)
-    return statistiky
+# KPI Karty (sjednocená výška i jednořádkové popisky)
+historie = nacti_historii()
+urgentni_zaznamy = [z for z in historie if z["priorita"] == "P1_URGENT"]
+s_prilohou = [z for z in historie if z.get("prilohy")]
+archivovane = [z for z in historie if z.get("archivovano")]
 
-try:
-    data = nacti_statistiky_gmailu()
-    
-    col1, col2, col3 = st.columns(3)
-    urgentni = data.get("P1-URGENT", 0)
-    celkem_ai = sum(v for k, v in data.items() if k != "P1-URGENT")
-    
-    col1.metric("🚨 Urgentní k řešení (P1)", urgentni)
-    col2.metric("📂 Celkem roztříděno AI", celkem_ai)
-    col3.metric("🏷️ Aktivních kategorií", len([k for k in data.keys() if k != "P1-URGENT"]))
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    st.markdown(f"""
+    <div class="metric-box">
+        <div class="metric-title">Urgentní (P1)</div>
+        <div class="metric-num num-red">{len(urgentni_zaznamy)}</div>
+    </div>""", unsafe_allow_html=True)
+with c2:
+    st.markdown(f"""
+    <div class="metric-box">
+        <div class="metric-title">S přílohou</div>
+        <div class="metric-num num-blue">{len(s_prilohou)}</div>
+    </div>""", unsafe_allow_html=True)
+with c3:
+    st.markdown(f"""
+    <div class="metric-box">
+        <div class="metric-title">Uklizeno z Inboxu</div>
+        <div class="metric-num">{len(archivovane)}</div>
+    </div>""", unsafe_allow_html=True)
+with c4:
+    st.markdown(f"""
+    <div class="metric-box">
+        <div class="metric-title">Zpracováno celkem</div>
+        <div class="metric-num">{len(historie)}</div>
+    </div>""", unsafe_allow_html=True)
 
-    st.divider()
+st.write("")
 
-    levy_sloupec, pravy_sloupec = st.columns([1, 1])
+# Záložky
+tab_prehled, tab_nastaveni, tab_log = st.tabs([
+    "Přehled roztříděné pošty",
+    "Nastavení kategorií a barev",
+    "Záznam běhu (Log)"
+])
 
-    with levy_sloupec:
-        st.subheader("📊 Rozložení e-mailů podle kategorií")
-        kategorie_data = {k: v for k, v in data.items() if k != "P1-URGENT"}
-        if kategorie_data:
-            st.bar_chart(kategorie_data)
+with tab_prehled:
+    if not historie:
+        st.info("Zatím zde nejsou žádné záznamy. Spusťte třídění v levém panelu.")
+    else:
+        col_f1, col_f2 = st.columns([1, 2])
+        with col_f1:
+            filtr_priorita = st.multiselect(
+                "Filtr priority:",
+                options=["P1_URGENT", "P2_STANDARD", "P3_LOW"],
+                default=["P1_URGENT", "P2_STANDARD", "P3_LOW"]
+            )
+        with col_f2:
+            dostupne_kat = sorted(list({z["kategorie"] for z in historie}))
+            filtr_kategorie = st.multiselect(
+                "Filtr kategorie:",
+                options=dostupne_kat,
+                default=dostupne_kat
+            )
+
+        filtrovana_data = [
+            z for z in historie
+            if z["priorita"] in filtr_priorita and z["kategorie"] in filtr_kategorie
+        ]
+
+        st.caption(f"Zobrazeno zpráv: {len(filtrovana_data)}")
+        
+        if filtrovana_data:
+            tabulka = []
+            for z in filtrovana_data:
+                ikona_prio = "🔴 P1 Urgent" if z["priorita"] == "P1_URGENT" else ("🟡 P2 Běžná" if z["priorita"] == "P2_STANDARD" else "⚪ P3 Info")
+                tabulka.append({
+                    "Priorita": ikona_prio,
+                    "Kategorie": z["kategorie"],
+                    "Odesílatel": z["odesilatel"].split("<")[0].strip().strip('"'),
+                    "Předmět": z["predmet"],
+                    "AI Shrnutí agendy": z["shrnuti"],
+                    "Příloha": f"📎 {z['prilohy']}" if z.get("prilohy") else "—",
+                    "Odkaz": z["gmail_url"]
+                })
+
+            st.dataframe(
+                tabulka,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Odkaz": st.column_config.LinkColumn("Akce", display_text="Otevřít v Gmailu ↗"),
+                    "AI Shrnutí agendy": st.column_config.TextColumn(width="large"),
+                }
+            )
         else:
-            st.info("Zatím nejsou k dispozici žádná data. Spusť třídění v levém panelu.")
+            st.warning("Žádné zprávy neodpovídají zvolenému filtru.")
 
-    with pravy_sloupec:
-        st.subheader("📜 Poslední záznamy z běhu bota")
-        if os.path.exists("bot.log"):
-            with open("bot.log", "r", encoding="utf-8") as f:
-                radky = f.readlines()[-12:]
-            st.code("".join(radky), language="text")
-        else:
-            st.info("Soubor bot.log zatím neexistuje.")
+with tab_nastaveni:
+    st.subheader("Firemní pravidla, štítky a barvy v Gmailu")
+    st.caption("Změny barev se po uložení automaticky propíší přímo do vašeho účtu Gmail.")
+    
+    konfig = nacti_config()
+    
+    with st.container(border=True):
+        col_firm1, col_firm2 = st.columns(2, gap="large")
+        with col_firm1:
+            novy_popis_firmy = st.text_input("Obor podnikání / kontext firmy:", value=konfig.get("firma_popis", ""))
+            st.caption("Slouží jako kontext pro AI při vyhodnocování naléhavosti e-mailů.")
+        with col_firm2:
+            vip_text = st.text_area(
+                "VIP odesílatelé nebo domény (jeden na řádek — vždy priorita P1):",
+                value="\n".join(konfig.get("vip_odesilatele", [])),
+                height=90
+            )
 
-except Exception as e:
-    st.error(f"Nepodařilo se načíst data z Gmailu: {e}")
+    st.write("")
+    st.markdown("#### Nastavení štítků a jejich barev")
+    
+    # Záhlaví sloupců pro dokonalé zarovnání
+    h1, h2, h3, h4 = st.columns([1.8, 3.2, 0.9, 1.0])
+    h1.markdown('<div class="table-header">Štítek v Gmailu</div>', unsafe_allow_html=True)
+    h2.markdown('<div class="table-header">Pravidlo pro AI zařazení</div>', unsafe_allow_html=True)
+    h3.markdown('<div class="table-header">Barva</div>', unsafe_allow_html=True)
+    h4.markdown('<div class="table-header">Archivace</div>', unsafe_allow_html=True)
+
+    upraveno_kategorie = {}
+    
+    for nazev, info in konfig.get("kategorie", {}).items():
+        with st.container(border=True):
+            c_nazev, c_popis, c_barva, c_arch = st.columns([1.8, 3.2, 0.9, 1.0], vertical_alignment="center")
+            
+            with c_barva:
+                vybrana_barva = vykresli_vyber_barvy(nazev, info.get("barva", "Šedá"))
+            
+            barva_hex = GMAIL_BARVY.get(vybrana_barva, GMAIL_BARVY["Šedá"])
+            with c_nazev:
+                st.markdown(
+                    f'<span class="label-preview" style="background-color:{barva_hex["backgroundColor"]}; color:{barva_hex["textColor"]};">AI/{nazev}</span>',
+                    unsafe_allow_html=True
+                )
+            with c_popis:
+                novy_popis = st.text_input("Pravidlo", value=info["popis"], key=f"popis_{nazev}", label_visibility="collapsed")
+            with c_arch:
+                nova_arch = st.checkbox("Uklidit", value=info.get("archivovat", False), key=f"arch_{nazev}")
+                
+            upraveno_kategorie[nazev] = {
+                "popis": novy_popis,
+                "archivovat": nova_arch,
+                "barva": vybrana_barva
+            }
+
+    st.write("")
+    st.markdown("#### Přidat nový štítek")
+    with st.container(border=True):
+        c_new1, c_new2, c_new3, c_new4 = st.columns([1.8, 3.2, 0.9, 1.0], vertical_alignment="center")
+        novy_nazev_kat = c_new1.text_input("Název", placeholder="Např. Objednavky", label_visibility="collapsed")
+        novy_popis_kat = c_new2.text_input("Popis", placeholder="Jaké e-maily sem zařadit...", label_visibility="collapsed")
+        with c_new3:
+            nova_barva_kat = vykresli_vyber_barvy("novy_stitek", "Zelená")
+        with c_new4:
+            novy_arch_kat = st.checkbox("Uklidit", key="new_arch")
+
+    st.write("")
+    if st.button("Uložit nastavení a propisovat barvy do Gmailu", type="primary"):
+        konfig["firma_popis"] = novy_popis_firmy
+        konfig["vip_odesilatele"] = [r.strip() for r in vip_text.splitlines() if r.strip()]
+        konfig["kategorie"] = upraveno_kategorie
+        
+        if novy_nazev_kat.strip() and novy_popis_kat.strip():
+            cisty_klic = novy_nazev_kat.strip().replace(" ", "_")
+            konfig["kategorie"][cisty_klic] = {
+                "popis": novy_popis_kat.strip(),
+                "archivovat": novy_arch_kat,
+                "barva": nova_barva_kat
+            }
+            
+        uloz_config(konfig)
+        with st.spinner("Synchronizuji štítky a barvy přímo do Gmailu..."):
+            synchronizuj_barvy_stitku()
+        st.toast("Nastavení uloženo a barvy v Gmailu aktualizovány!", icon="✅")
+        st.rerun()
+
+with tab_log:
+    st.subheader("Záznam systémových operací")
+    if os.path.exists("bot.log"):
+        with open("bot.log", "r", encoding="utf-8") as f:
+            radky = f.readlines()[-20:]
+        st.code("".join(radky), language="text")
+    else:
+        st.info("Zatím neexistuje žádný log.")

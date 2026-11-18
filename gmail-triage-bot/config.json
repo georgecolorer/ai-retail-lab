@@ -1,0 +1,39 @@
+{
+  "firma_popis": "Retailový provoz a e-shop",
+  "vip_odesilatele": [
+    "ucetni@firma.cz",
+    "urgent@dodavatel.cz"
+  ],
+  "kategorie": {
+    "Faktury_Finance": {
+      "popis": "Faktury, daňové doklady, výzvy k platbě, bankovní avíza",
+      "archivovat": false,
+      "barva": "Žlutá"
+    },
+    "Zakaznici_Reklamace": {
+      "popis": "Dotazy zákazníků, reklamace zboží, vratky, stížnosti na dopravu",
+      "archivovat": false,
+      "barva": "Červená"
+    },
+    "Dodavatele_Logistika": {
+      "popis": "Dodací listy, potvrzení objednávek od dodavatelů, informace od dopravců",
+      "archivovat": false,
+      "barva": "Oranžová"
+    },
+    "Interni_Provoz": {
+      "popis": "Interní komunikace týmu, provozní záležitosti",
+      "archivovat": false,
+      "barva": "Modrá"
+    },
+    "System_Notifikace": {
+      "popis": "Bezpečnostní upozornění, potvrzení registrací, notifikace ze systémů",
+      "archivovat": true,
+      "barva": "Fialová"
+    },
+    "Newsletter_Spam": {
+      "popis": "Marketingové nabídky, slevové akce, nevyžádaná obchodní sdělení",
+      "archivovat": true,
+      "barva": "Šedá"
+    }
+  }
+}
