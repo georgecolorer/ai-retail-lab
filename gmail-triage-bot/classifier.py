@@ -110,11 +110,11 @@ def analyzuj_email(odesilatel: str, predmet: str, obsah: str, ma_prilohu: bool =
                 if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
                     posledni_chyba = e
                     if "limit: 0" not in err_str and "PerDay" not in err_str:
-                with _API_LOCK:
-                    _COOLDOWN_UNTIL = max(_COOLDOWN_UNTIL, time.time() + 45.0)
-                if _pokus < 3:
-                    continue
-            break
+                        with _API_LOCK:
+                            _COOLDOWN_UNTIL = max(_COOLDOWN_UNTIL, time.time() + 45.0)
+                        if _pokus < 3:
+                            continue
+                    break
                 if "503" in err_str or "UNAVAILABLE" in err_str:
                     posledni_chyba = e
                     time.sleep(2)
