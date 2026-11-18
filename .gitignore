@@ -9,3 +9,5 @@ token.json
 history.json
 
 *zaloha*
+
+__pycache__/
